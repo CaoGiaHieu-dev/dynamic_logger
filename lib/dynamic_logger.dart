@@ -319,11 +319,19 @@ class DynamicLogger {
   /// Parameters:
   /// - [level]: The log level.
   String _color(LogLevel level) {
-    return switch (level) {
-      LogLevel.INFO => '38;5;45m',
-      LogLevel.WARNING => '33m',
-      LogLevel.ERROR => '38;5;202m',
-    };
+    String result;
+    switch (level) {
+      case LogLevel.INFO:
+        result = '38;5;45m';
+        break;
+      case LogLevel.WARNING:
+        result = '33m';
+        break;
+      case LogLevel.ERROR:
+        result = '38;5;202m';
+        break;
+    }
+    return result;
   }
 
   /// Maps the log level to the corresponding logging level value.
@@ -331,11 +339,19 @@ class DynamicLogger {
   /// Parameters:
   /// - [level]: The log level.
   static int _mapLogLevel(LogLevel level) {
-    return switch (level) {
-      LogLevel.INFO => Level.CONFIG.value,
-      LogLevel.WARNING => Level.WARNING.value,
-      LogLevel.ERROR => Level.SEVERE.value,
-    };
+    int result;
+    switch (level) {
+      case LogLevel.INFO:
+        result = Level.CONFIG.value;
+        break;
+      case LogLevel.WARNING:
+        result = Level.WARNING.value;
+        break;
+      case LogLevel.ERROR:
+        result = Level.SEVERE.value;
+        break;
+    }
+    return result;
   }
 
   /// Formats data for logging, handling different data types appropriately.
