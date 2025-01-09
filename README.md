@@ -31,6 +31,30 @@ void main() {
 }
 ```
 
+## Example Output
+
+Here is an example of what the logs might look like:
+```
+[LOGGER] ═══════════╡ Dynamic Log ╞═══════════
+         This is an info message
+         ═════════════════════════════════════
+         
+[LOGGER] ═══════════╡ Dynamic Log ╞═══════════
+         This is a warning message
+         ═════════════════════════════════════
+         
+[LOGGER] ═══════════╡ MyTag ╞═══════════
+         This is an error message
+         ═══════════════════════════════
+         
+[LOGGER] ═══════════╡ Dynamic Log ╞═══════════
+         {
+             "key" : "value",
+             "anotherKey" : "anotherValue"
+           }
+         ═════════════════════════════════════
+```
+
 ## Installation
 
 Add `dynamic_logger` as a dependency in your `pubspec.yaml` file.
