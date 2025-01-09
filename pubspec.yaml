@@ -1,9 +1,9 @@
 name: dynamic_logger
 description: A simple and structured logger for Dart applications.
 version: 0.1.0
-homepage: https://github.com/yourusername/dynamic_logger
-repository: https://github.com/yourusername/dynamic_logger
-issue_tracker: https://github.com/yourusername/dynamic_logger/issues
+homepage: https://github.com/CaoGiaHieu-dev/dynamic_logger
+repository: https://github.com/CaoGiaHieu-dev/dynamic_logger
+issue_tracker: https://github.com/CaoGiaHieu-dev/dynamic_logger/issues
 environment:
   sdk: ">=2.12.0"
 
