@@ -222,7 +222,7 @@ class DynamicLogger {
     final middleLength = name.length + 4; // Length of '┤  ├' + name
     final totalLength = (_borderLength * 2) + middleLength;
     // Ensure footer length matches header, accounting for corner characters
-    return '└${'─' * (totalLength - 2)}┘'; // -2 for corners '└' and '┘'
+    return '└${'─' * (totalLength)}┘';
   }
 
   /// Recursively formats the log message based on its type, applying indentation and color.

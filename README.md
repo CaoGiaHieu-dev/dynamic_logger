@@ -28,7 +28,7 @@ Add `dynamic_logger` as a dependency in your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  dynamic_logger: ^0.2.0 # Replace with the latest version
+  dynamic_logger: ^0.2.1 # Replace with the latest version
   dio: ^5.0.0 # Add dio if you need to log RequestOptions/FormData
 ```
 Then run dart pub get or flutter pub get.

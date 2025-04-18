@@ -1,3 +1,8 @@
+## 0.2.1
+
+-   Fix footer output
+
+
 ## 0.2.0
 
 -   **BREAKING:** Refactored core formatting logic for significantly improved memory efficiency, especially with large data structures. Uses `StringBuffer` more effectively and reduces intermediate string creation.
