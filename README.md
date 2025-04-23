@@ -78,7 +78,7 @@ You can set global defaults for the logger's behavior. This is useful for settin
 import 'package:dynamic_logger/dynamic_logger.dart';
 import 'dart:developer' as developer; // Example: using dart:developer
 
-void setupLogger() {
+void setupLogger({bool isProduction = false}) { // Example: pass build flag
   DynamicLogger.configure(
     // Enable truncation by default for all logs
     truncate: true,
@@ -86,20 +86,26 @@ void setupLogger() {
     maxDepth: 5,
     // Set default max entries shown for Maps/Lists
     maxCollectionEntries: 20,
+    // Globally enable or disable logging (defaults to true)
+    enable: !isProduction, // Disable logs in production builds <-- MODIFIED Example
     // Optionally override the default log handler (e.g., for custom output)
     // logHandler: (message, {level, name, ...}) {
     //   print("[$name - Level $level]: $message");
     // }
   );
 
-  print("Logger configured with default truncation.");
+  print("Logger configured: Enabled=${!isProduction}, Truncation=true"); // MODIFIED Example
 }
 
 void main() {
-  setupLogger();
+  bool kReleaseMode = const bool.fromEnvironment('dart.vm.product');
+  setupLogger(isProduction: kReleaseMode);
+
   // Subsequent logs will use the configured defaults unless overridden
-  // DynamicLogger.log(someVeryLargeMap); // Will be truncated by default
+  // DynamicLogger.log(someVeryLargeMap); // Will be truncated by default (if enabled)
+  DynamicLogger.log("This log might be disabled depending on the build mode.");
 }
+
 ```
 ## Truncation Per Call
 Even if you have global defaults, you can override truncation settings for specific log calls.

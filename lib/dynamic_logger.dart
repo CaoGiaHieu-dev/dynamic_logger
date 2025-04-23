@@ -1,4 +1,4 @@
-library; // Library directive
+library;
 
 import 'dart:async';
 import 'dart:convert'; // Used for JsonEncoder, primarily in _formatValue
@@ -31,7 +31,7 @@ typedef LogHandler = void Function(
 /// Provides structured, color-coded output for various data types, including
 /// complex nested Maps and Lists, as well as specific support for `dio` objects.
 /// Includes features for truncating large data structures to manage memory usage
-/// and improve log readability.
+/// and improve log readability. Can be globally enabled or disabled via [configure].
 ///
 /// Uses a singleton pattern accessed via the `DynamicLogger()` factory constructor
 /// or static methods like `DynamicLogger.log` and `DynamicLogger.configure`.
@@ -66,6 +66,10 @@ class DynamicLogger {
   /// Can be overridden per log call using the `truncate` parameter in `log`.
   static bool _defaultTruncate = false;
 
+  /// Global flag to enable or disable logging entirely. Defaults to true (enabled).
+  /// Controlled via the `enable` parameter in [configure].
+  static bool _enabled = true;
+
   /// Configures the default behavior of the [DynamicLogger].
   ///
   /// Call this early in your application (e.g., in `main()`) to set global preferences.
@@ -75,11 +79,13 @@ class DynamicLogger {
   /// - [maxDepth]: Sets the default maximum recursion depth for formatting when truncation is enabled.
   /// - [maxCollectionEntries]: Sets the default maximum number of entries shown for collections when truncation is enabled.
   /// - [truncate]: Sets whether to enable truncation by default for all subsequent `log` calls (unless overridden).
+  /// - [enable]: Sets whether the logger is globally enabled or disabled. Defaults to true. If set to false, calls to `log` will be ignored.
   static void configure({
     LogHandler? logHandler,
     int? maxDepth,
     int? maxCollectionEntries,
     bool? truncate,
+    bool? enable,
   }) {
     if (logHandler != null) _instance.logHandler = logHandler;
     if (maxDepth != null) _defaultMaxDepth = maxDepth;
@@ -87,6 +93,7 @@ class DynamicLogger {
       _defaultMaxCollectionEntries = maxCollectionEntries;
     }
     if (truncate != null) _defaultTruncate = truncate;
+    if (enable != null) _enabled = enable;
   }
 
   // --- Constants for Formatting ---
@@ -104,6 +111,8 @@ class DynamicLogger {
   ///
   /// This is the primary method for logging. It formats the input `msg` based on its type,
   /// applies color-coding based on the `level`, adds headers/footers, and handles truncation.
+  ///
+  /// If the logger is globally disabled via `configure(enable: false)`, this method does nothing.
   ///
   /// Parameters:
   /// - [msg]: The message or data to log (e.g., String, int, Map, List, RequestOptions).
@@ -124,6 +133,9 @@ class DynamicLogger {
     int? maxDepth,
     int? maxCollectionEntries,
   }) {
+    // Do nothing if logging is disabled
+    if (!_enabled) return;
+
     // Determine the handler, tag, and color for this log call
     final handler = logHandlerOverride ?? _instance.logHandler;
     final name = tag ?? "Dynamic Log";
