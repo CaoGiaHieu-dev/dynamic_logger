@@ -2,11 +2,9 @@
 
 -   **Feature:** Added global enable/disable capability via the `enable` parameter in `DynamicLogger.configure`. When disabled (`enable: false`), calls to `DynamicLogger.log` will be ignored.
 
-
 ## 0.2.1
 
 -   Fix footer output
-
 
 ## 0.2.0
 
