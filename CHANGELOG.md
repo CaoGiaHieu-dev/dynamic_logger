@@ -1,3 +1,9 @@
+## 0.3.0
+
+- **Chore:** Updated example file to include custom log handler configuration for better console output visibility.
+- **Chore:** Remove dependency.
+- **Docs:** Improved README with clearer examples and output visibility instructions.
+
 ## 0.2.2
 
 - **Feature:** Added global enable/disable capability via the `enable` parameter in `DynamicLogger.configure`. When disabled (`enable: false`), calls to `DynamicLogger.log` will be ignored.

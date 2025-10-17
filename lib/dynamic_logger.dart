@@ -3,8 +3,7 @@ library;
 import 'dart:async';
 import 'dart:convert'; // Used for JsonEncoder, primarily in _formatValue
 import 'dart:developer' as developer; // Default log handler
-import 'package:dio/dio.dart'; // For handling RequestOptions and FormData
-import 'package:logging/logging.dart' as logging; // For standard Level values
+import 'dart:isolate';
 
 /// Enum representing the different severity levels for log messages.
 enum LogLevel { INFO, WARNING, ERROR }
@@ -24,6 +23,101 @@ typedef LogHandler = void Function(
   DateTime? time, // Timestamp of the log record
   Zone? zone, // Zone where the log record was created
 });
+
+/// A data class to hold all the necessary information for formatting a log message.
+/// This object is passed to the isolate.
+class _LogPayload {
+  final dynamic msg;
+  final String? tag;
+  final LogLevel level;
+  final bool? truncate;
+  final int? maxDepth;
+  final int? maxCollectionEntries;
+
+  // Global defaults that need to be passed to the isolate context
+  final int defaultMaxDepth;
+  final int defaultMaxCollectionEntries;
+  final bool defaultTruncate;
+  final String colorCode;
+
+  _LogPayload({
+    required this.msg,
+    this.tag,
+    required this.level,
+    this.truncate,
+    this.maxDepth,
+    this.maxCollectionEntries,
+    required this.defaultMaxDepth,
+    required this.defaultMaxCollectionEntries,
+    required this.defaultTruncate,
+    required this.colorCode,
+  });
+}
+
+/// Top-level function to be executed in an isolate.
+///
+/// This function takes a [_LogPayload] and performs the heavy lifting of formatting
+/// the message, returning the final formatted string.
+String _formatInIsolate(_LogPayload payload) {
+  // Determine effective truncation settings for this call
+  final bool shouldTruncate = payload.truncate ?? payload.defaultTruncate;
+  final int effectiveMaxDepth =
+      (shouldTruncate ? (payload.maxDepth ?? payload.defaultMaxDepth) : -1);
+  final int effectiveMaxEntries = (shouldTruncate
+      ? (payload.maxCollectionEntries ?? payload.defaultMaxCollectionEntries)
+      : -1);
+
+  final buffer = StringBuffer();
+  final name = payload.tag ?? "Dynamic Log";
+  final colorCode = payload.colorCode;
+
+  // --- Header ---
+  final header = DynamicLogger._logHeader(name);
+  buffer.writeln('$colorCode$header${DynamicLogger._colorReset}');
+
+  // --- Content ---
+  final contentBuffer = StringBuffer();
+  try {
+    if (payload.msg == null ||
+        payload.msg is String ||
+        payload.msg is num ||
+        payload.msg is bool) {
+      contentBuffer
+          .writeln('$colorCode${DynamicLogger._formatValue(payload.msg)}${DynamicLogger._colorReset}');
+    } else {
+      DynamicLogger._formatLogMessage(
+        contentBuffer,
+        payload.msg,
+        colorCode: colorCode,
+        level: 0,
+        maxDepth: effectiveMaxDepth,
+        maxCollectionEntries: effectiveMaxEntries,
+      );
+    }
+      } catch (e) {
+        contentBuffer.clear();    final errorIndent = DynamicLogger._indentSpace * 1;
+    contentBuffer.writeln(
+        '$colorCode$errorIndent Error formatting log message: $e${DynamicLogger._colorReset}');
+    contentBuffer.writeln(
+        '$colorCode$errorIndent Falling back to default toString():${DynamicLogger._colorReset}');
+    contentBuffer.writeln(
+        '$colorCode$errorIndent${DynamicLogger._formatValue(payload.msg)}${DynamicLogger._colorReset}');
+    // Note: Cannot call developer.log from an isolate without more complex setup.
+    // The primary goal is to prevent a crash and return a useful message.
+  }
+
+  buffer.write(contentBuffer.toString().trimRight());
+  if (!buffer.toString().endsWith('\n')) {
+    buffer.writeln();
+  }
+
+  // --- Footer ---
+  final footer = DynamicLogger._logFooter(name);
+  buffer.writeln('$colorCode$footer${DynamicLogger._colorReset}');
+
+  return buffer.toString().trimRight();
+}
+
 
 /// {@template dynamic_logger}
 /// A flexible and memory-efficient logger for Dart/Flutter applications.
@@ -136,85 +230,38 @@ class DynamicLogger {
     // Do nothing if logging is disabled
     if (!_enabled) return;
 
-    // Determine the handler, tag, and color for this log call
-    final handler = logHandlerOverride ?? _instance.logHandler;
-    final name = tag ?? "Dynamic Log";
-    final colorCode = _instance._getColorCode(level);
+    final payload = _LogPayload(
+      msg: msg,
+      tag: tag,
+      level: level,
+      truncate: truncate,
+      maxDepth: maxDepth,
+      maxCollectionEntries: maxCollectionEntries,
+      defaultMaxDepth: _defaultMaxDepth,
+      defaultMaxCollectionEntries: _defaultMaxCollectionEntries,
+      defaultTruncate: _defaultTruncate,
+      colorCode: _instance._getColorCode(level),
+    );
 
-    // Determine effective truncation settings for this call
-    final bool shouldTruncate = truncate ?? _defaultTruncate;
-    // Use -1 to signify "no limit" if truncation is disabled
-    final int effectiveMaxDepth =
-        (shouldTruncate ? (maxDepth ?? _defaultMaxDepth) : -1);
-    final int effectiveMaxEntries = (shouldTruncate
-        ? (maxCollectionEntries ?? _defaultMaxCollectionEntries)
-        : -1);
-
-    final buffer = StringBuffer();
-
-    // --- Header ---
-    final header = _logHeader(name);
-    buffer.writeln('$colorCode$header$_colorReset');
-
-    // --- Content ---
-    // Use a separate buffer for content formatting to handle potential errors gracefully
-    final contentBuffer = StringBuffer();
-    try {
-      // Handle top-level primitives directly for correct alignment
-      if (msg == null || msg is String || msg is num || msg is bool) {
-        // Format directly using _formatValue, add color, no extra indent
-        contentBuffer.writeln('$colorCode${_formatValue(msg)}$_colorReset');
-      } else {
-        // For collections/objects, start the recursive formatting
-        _formatLogMessage(
-          contentBuffer,
-          msg,
-          colorCode: colorCode,
-          level: 0, // Level 0 means content starts directly under header
-          maxDepth: effectiveMaxDepth,
-          maxCollectionEntries: effectiveMaxEntries,
-        );
-      }
-    } catch (e, s) {
-      // Handle errors during the formatting process itself
-      contentBuffer.clear(); // Clear potentially partial content
-      final errorIndent = _indentSpace * 1; // Indent error message slightly
-      contentBuffer.writeln(
-          '$colorCode$errorIndent Error formatting log message: $e$_colorReset');
-      contentBuffer.writeln(
-          '$colorCode$errorIndent Falling back to default toString():$_colorReset');
-      // Use _formatValue for the fallback msg as well for consistency, indented
-      contentBuffer
-          .writeln('$colorCode$errorIndent${_formatValue(msg)}$_colorReset');
-      // Log the internal error using the default developer log for visibility
+    // Fire-and-forget the isolate
+    Isolate.run(() => _formatInIsolate(payload)).then((formattedMessage) {
+      final handler = logHandlerOverride ?? _instance.logHandler;
+      handler(
+        formattedMessage,
+        name: 'LOGGER',
+        stackTrace: stackTrace,
+        level: _mapLogLevel(level),
+      );
+    }).catchError((e, s) {
+      // Handle errors from the isolate itself (e.g., if it fails to spawn)
       developer.log(
-        'Error during DynamicLogger formatting',
+        'Error spawning DynamicLogger isolate',
         error: e,
         stackTrace: s,
-        level: logging.Level.SEVERE.value, // Use standard logging level value
+        level: 1000,
         name: 'DynamicLoggerInternal',
       );
-    }
-
-    // Add formatted content lines to the main buffer
-    buffer.write(contentBuffer.toString().trimRight());
-    // Ensure exactly one newline before the footer
-    if (!buffer.toString().endsWith('\n')) {
-      buffer.writeln();
-    }
-
-    // --- Footer ---
-    final footer = _logFooter(name);
-    buffer.writeln('$colorCode$footer$_colorReset');
-
-    // --- Log Output ---
-    // Pass the complete formatted string and other details to the handler
-    handler(
-      buffer.toString().trimRight(), // Trim final trailing newline
-      name: 'LOGGER', // Consistent name for developer tools integration
-      stackTrace: stackTrace,
-      level: _mapLogLevel(level), // Map our LogLevel to standard int level
-    );
+    });
   }
 
   // --- Header/Footer ---
@@ -288,20 +335,6 @@ class DynamicLogger {
           level: level, // List brackets are at the current level
           maxDepth: maxDepth,
           maxCollectionEntries: maxCollectionEntries);
-    } else if (data is FormData) {
-      // Delegate FormData formatting
-      _logFormData(buffer, data,
-          colorCode: colorCode,
-          level: level,
-          maxDepth: maxDepth,
-          maxCollectionEntries: maxCollectionEntries);
-    } else if (data is RequestOptions) {
-      // Delegate RequestOptions formatting
-      _formatRequestOptions(buffer, data,
-          colorCode: colorCode,
-          level: level,
-          maxDepth: maxDepth,
-          maxCollectionEntries: maxCollectionEntries);
     } else {
       // Fallback for unknown objects: use toString() and apply indent
       buffer.writeln('$colorCode$currentIndent$data$_colorReset');
@@ -309,77 +342,6 @@ class DynamicLogger {
   }
 
   // --- Type-Specific Formatters ---
-
-  /// Formats FormData (from `dio` package) with indentation and color.
-  /// Separates fields and files. Applies truncation limits to both sections.
-  static void _logFormData(
-    StringBuffer buffer,
-    FormData data, {
-    required String colorCode,
-    required int level,
-    required int maxDepth,
-    required int maxCollectionEntries,
-  }) {
-    final currentIndent = _indentSpace * level;
-    final nextLevelIndent = _indentSpace * (level + 1);
-
-    // --- Format fields ---
-    buffer.writeln('$colorCode${currentIndent}Fields: {$_colorReset}');
-    if (data.fields.isNotEmpty) {
-      int count = 0;
-      final fieldList = data.fields.toList();
-      for (int i = 0; i < fieldList.length; i++) {
-        final entry = fieldList[i];
-        final isLast = i == fieldList.length - 1;
-        // Check collection entry truncation
-        if (maxCollectionEntries != -1 && count >= maxCollectionEntries) {
-          buffer.writeln(
-              '$colorCode$nextLevelIndent... (${fieldList.length - count} more fields)$_colorReset');
-          break;
-        }
-        final comma = !isLast &&
-                (maxCollectionEntries == -1 || count < maxCollectionEntries - 1)
-            ? ','
-            : '';
-        // Use _formatValue for consistent value formatting (e.g., quoting strings)
-        buffer.writeln(
-            '$colorCode$nextLevelIndent"${entry.key}": ${_formatValue(entry.value)}$comma$_colorReset');
-        count++;
-      }
-    }
-    buffer.writeln(
-        '$colorCode$currentIndent}$_colorReset'); // Closing brace for Fields
-
-    // --- Format files ---
-    buffer.writeln('$colorCode${currentIndent}Files: {$_colorReset}');
-    if (data.files.isNotEmpty) {
-      int count = 0;
-      final fileList = data.files.toList();
-      for (int i = 0; i < fileList.length; i++) {
-        final entry = fileList[i];
-        final isLast = i == fileList.length - 1;
-        // Check collection entry truncation
-        if (maxCollectionEntries != -1 && count >= maxCollectionEntries) {
-          buffer.writeln(
-              '$colorCode$nextLevelIndent... (${fileList.length - count} more files)$_colorReset');
-          break;
-        }
-        final comma = !isLast &&
-                (maxCollectionEntries == -1 || count < maxCollectionEntries - 1)
-            ? ','
-            : '';
-        final fileName = entry.value.filename ?? 'unknown_file';
-        // Create a descriptive string for the file and format it as a value
-        final fileDesc = _formatValue(
-            'File(name: "$fileName", type: ${entry.value.contentType}, size: ${entry.value.length})');
-        buffer.writeln(
-            '$colorCode$nextLevelIndent"${entry.key}": $fileDesc$comma$_colorReset');
-        count++;
-      }
-    }
-    buffer.writeln(
-        '$colorCode$currentIndent}$_colorReset'); // Closing brace for Files
-  }
 
   /// Formats a List with proper indentation, color, commas, and truncation.
   static void _logList(
@@ -430,8 +392,7 @@ class DynamicLogger {
       final itemLines = itemBuffer.toString().trimRight().split('\n');
       for (int j = 0; j < itemLines.length; j++) {
         final line = itemLines[j];
-        if (j == itemLines.length - 1) {
-          // Is this the last line of the formatted item?
+        if (j == itemLines.length - 1) { // Is this the last line of the formatted item?
           buffer.writeln(
               '$line$colorCode$comma$_colorReset'); // Add comma and reset color
         } else {
@@ -561,69 +522,6 @@ class DynamicLogger {
     }
   }
 
-  /// Formats RequestOptions (from `dio` package) with indentation and color.
-  /// Displays key information like method, URI, headers, query params, data, and common options.
-  static void _formatRequestOptions(
-    StringBuffer buffer,
-    RequestOptions options, {
-    required String colorCode,
-    required int level,
-    required int maxDepth,
-    required int maxCollectionEntries,
-  }) {
-    final currentIndent = _indentSpace * level;
-    final nextLevel = level + 1;
-    final nextLevelIndent = _indentSpace * nextLevel;
-
-    // Request Line (Method and URI)
-    buffer.writeln(
-        '$colorCode${currentIndent}Request: ${options.method} ${options.uri}$_colorReset');
-
-    // --- Helper to format sections (Headers, Query, Data) ---
-    void formatSection(String title, dynamic data) {
-      if (data == null) return; // Skip null sections
-      // Skip empty collections/strings to avoid empty sections
-      bool isEmptyCollection =
-          (data is Map && data.isEmpty) || (data is List && data.isEmpty);
-      bool isEmptyString = data is String && data.isEmpty;
-      bool isEmptyFormData =
-          data is FormData && data.fields.isEmpty && data.files.isEmpty;
-      if (isEmptyCollection || isEmptyString || isEmptyFormData) return;
-
-      // Print section title at the current level
-      buffer.writeln('$colorCode$currentIndent$title:$_colorReset');
-      // Format section content recursively, indented at the next level
-      _formatLogMessage(buffer, data,
-          colorCode: colorCode,
-          level: nextLevel, // Section content starts one level deeper
-          maxDepth: maxDepth,
-          maxCollectionEntries: maxCollectionEntries);
-    }
-
-    // --- Format Request Parts ---
-    formatSection('Headers', options.headers);
-    formatSection('Query Parameters', options.queryParameters);
-    formatSection('Data', options.data); // Handles Map, List, FormData, etc.
-
-    // --- Format Common Options ---
-    buffer.writeln('$colorCode$currentIndent--- Options ---$_colorReset');
-    void formatOption(String key, dynamic value) {
-      // Print each option key-value pair at the next level
-      buffer.writeln(
-          '$colorCode$nextLevelIndent$key: ${_formatValue(value)}$_colorReset');
-    }
-
-    formatOption('Content-Type', options.contentType);
-    formatOption('Response Type', options.responseType.toString());
-    formatOption('Follow Redirects', options.followRedirects);
-    formatOption(
-        'Connect Timeout (ms)', options.connectTimeout?.inMilliseconds);
-    formatOption(
-        'Receive Timeout (ms)', options.receiveTimeout?.inMilliseconds);
-    formatOption('Send Timeout (ms)', options.sendTimeout?.inMilliseconds);
-    // Add more options here if needed (e.g., extra headers, validateStatus)
-  }
-
   // --- Color and Level Mapping ---
 
   /// Returns the ANSI color code string corresponding to the given [LogLevel].
@@ -645,11 +543,11 @@ class DynamicLogger {
       // Mapping INFO to CONFIG for better visibility in some tools,
       // as INFO level might be filtered out by default.
       case LogLevel.INFO:
-        return logging.Level.CONFIG.value;
+        return 700;
       case LogLevel.WARNING:
-        return logging.Level.WARNING.value;
+        return 900;
       case LogLevel.ERROR:
-        return logging.Level.SEVERE.value; // Map ERROR to SEVERE
+        return 1000; // Map ERROR to SEVERE
     }
   }
 
@@ -712,16 +610,6 @@ class DynamicLogger {
           maxCollectionEntries: maxCollectionEntries);
     } else if (data is List) {
       _logPlainTextList(buffer, data,
-          level: level,
-          maxDepth: maxDepth,
-          maxCollectionEntries: maxCollectionEntries);
-    } else if (data is FormData) {
-      _logPlainTextFormData(buffer, data,
-          level: level,
-          maxDepth: maxDepth,
-          maxCollectionEntries: maxCollectionEntries);
-    } else if (data is RequestOptions) {
-      _formatPlainTextRequestOptions(buffer, data,
           level: level,
           maxDepth: maxDepth,
           maxCollectionEntries: maxCollectionEntries);
@@ -793,8 +681,7 @@ class DynamicLogger {
         final valueLines = valueBuffer.toString().trimRight().split('\n');
         for (int j = 0; j < valueLines.length; j++) {
           final line = valueLines[j];
-          if (j == valueLines.length - 1) {
-            // Last line of value
+          if (j == valueLines.length - 1) { // Last line of value
             buffer.writeln('$line$comma');
           } else {
             buffer.writeln(line);
@@ -847,8 +734,7 @@ class DynamicLogger {
       final itemLines = itemBuffer.toString().trimRight().split('\n');
       for (int j = 0; j < itemLines.length; j++) {
         final line = itemLines[j];
-        if (j == itemLines.length - 1) {
-          // Last line of item
+        if (j == itemLines.length - 1) { // Last line of item
           buffer.writeln('$line$comma');
         } else {
           buffer.writeln(line);
@@ -858,115 +744,4 @@ class DynamicLogger {
     }
     buffer.writeln('$currentIndent]'); // Closing bracket
   }
-
-  /// Plain text formatter for FormData. Mirrors `_logFormData` but without color codes.
-  static void _logPlainTextFormData(StringBuffer buffer, FormData data,
-      {required int level,
-      required int maxDepth,
-      required int maxCollectionEntries}) {
-    final currentIndent = _indentSpace * level;
-    final nextLevelIndent = _indentSpace * (level + 1);
-
-    // Fields section
-    buffer.writeln('${currentIndent}Fields: {');
-    if (data.fields.isNotEmpty) {
-      int count = 0;
-      final fieldList = data.fields.toList();
-      for (int i = 0; i < fieldList.length; i++) {
-        final entry = fieldList[i];
-        final isLast = i == fieldList.length - 1;
-        if (maxCollectionEntries != -1 && count >= maxCollectionEntries) {
-          buffer.writeln(
-              '$nextLevelIndent... (${fieldList.length - count} more fields)');
-          break;
-        }
-        final comma = !isLast &&
-                (maxCollectionEntries == -1 || count < maxCollectionEntries - 1)
-            ? ','
-            : '';
-        buffer.writeln(
-            '$nextLevelIndent"${entry.key}": ${_formatValue(entry.value)}$comma');
-        count++;
-      }
-    }
-    buffer.writeln('$currentIndent}');
-
-    // Files section
-    buffer.writeln('${currentIndent}Files: {');
-    if (data.files.isNotEmpty) {
-      int count = 0;
-      final fileList = data.files.toList();
-      for (int i = 0; i < fileList.length; i++) {
-        final entry = fileList[i];
-        final isLast = i == fileList.length - 1;
-        if (maxCollectionEntries != -1 && count >= maxCollectionEntries) {
-          buffer.writeln(
-              '$nextLevelIndent... (${fileList.length - count} more files)');
-          break;
-        }
-        final comma = !isLast &&
-                (maxCollectionEntries == -1 || count < maxCollectionEntries - 1)
-            ? ','
-            : '';
-        final fileName = entry.value.filename ?? 'unknown_file';
-        final fileDesc = _formatValue(
-            'File(name: "$fileName", type: ${entry.value.contentType}, size: ${entry.value.length})');
-        buffer.writeln('$nextLevelIndent"${entry.key}": $fileDesc$comma');
-        count++;
-      }
-    }
-    buffer.writeln('$currentIndent}');
-  }
-
-  /// Plain text formatter for RequestOptions. Mirrors `_formatRequestOptions` but without color codes.
-  static void _formatPlainTextRequestOptions(
-      StringBuffer buffer, RequestOptions options,
-      {required int level,
-      required int maxDepth,
-      required int maxCollectionEntries}) {
-    final currentIndent = _indentSpace * level;
-    final nextLevel = level + 1;
-    final nextLevelIndent = _indentSpace * nextLevel;
-
-    // Request line
-    buffer.writeln('${currentIndent}Request: ${options.method} ${options.uri}');
-
-    // Helper for sections
-    void formatSection(String title, dynamic data) {
-      if (data == null) return;
-      bool isEmptyCollection =
-          (data is Map && data.isEmpty) || (data is List && data.isEmpty);
-      bool isEmptyString = data is String && data.isEmpty;
-      bool isEmptyFormData =
-          data is FormData && data.fields.isEmpty && data.files.isEmpty;
-      if (isEmptyCollection || isEmptyString || isEmptyFormData) return;
-
-      buffer.writeln('$currentIndent$title:'); // Section title
-      // Format section content recursively
-      _formatPlainTextMessage(buffer, data,
-          level: nextLevel,
-          maxDepth: maxDepth,
-          maxCollectionEntries: maxCollectionEntries);
-    }
-
-    // Format sections
-    formatSection('Headers', options.headers);
-    formatSection('Query Parameters', options.queryParameters);
-    formatSection('Data', options.data);
-
-    // Format options
-    buffer.writeln('$currentIndent--- Options ---');
-    void formatOption(String key, dynamic value) {
-      buffer.writeln('$nextLevelIndent$key: ${_formatValue(value)}');
-    }
-
-    formatOption('Content-Type', options.contentType);
-    formatOption('Response Type', options.responseType.toString());
-    formatOption('Follow Redirects', options.followRedirects);
-    formatOption(
-        'Connect Timeout (ms)', options.connectTimeout?.inMilliseconds);
-    formatOption(
-        'Receive Timeout (ms)', options.receiveTimeout?.inMilliseconds);
-    formatOption('Send Timeout (ms)', options.sendTimeout?.inMilliseconds);
-  }
-} // End of DynamicLogger class
+}

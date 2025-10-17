@@ -1,24 +1,26 @@
-import 'dart:async';
 import 'dart:convert'; // Required for jsonDecode
 import 'package:dynamic_logger/dynamic_logger.dart';
-// import 'package:dio/dio.dart'; // Uncomment if you want to log RequestOptions
 
-void main() async {
+Future<void> main() async {
+  // Configure logger to print to console for visibility
+  DynamicLogger.configure(
+    logHandler: (message,
+        {error, level = 0, name = '', stackTrace, time, zone, sequenceNumber}) {
+      print(message);
+    },
+  );
+
   // --- Basic Examples ---
-  print('\n--- Basic Logging Examples ---');
-  await Future.delayed(const Duration(milliseconds: 500));
+
   DynamicLogger.log('This is an info message');
 
-  await Future.delayed(const Duration(milliseconds: 500));
   DynamicLogger.log('This is a warning message', level: LogLevel.WARNING);
 
-  await Future.delayed(const Duration(milliseconds: 500));
   DynamicLogger.log('This is an error message',
       tag: 'MyTag', level: LogLevel.ERROR);
 
   // --- Complex Nested Data ---
-  print('\n--- Complex Nested Data Example ---');
-  await Future.delayed(const Duration(milliseconds: 500));
+
   final complexData = {
     'stringKey': 'A simple string with "quotes" and\nnewlines.',
     'integerKey': 12345,
@@ -58,8 +60,6 @@ void main() async {
   DynamicLogger.log(complexData, tag: 'ComplexData');
 
   // --- Large JSON Example ---
-  print('\n--- Large JSON Example (Simulated) ---');
-  await Future.delayed(const Duration(milliseconds: 500));
 
   // Simulate a large JSON structure (e.g., from an API response)
   // In a real app, you might get this from an HTTP response or file.
@@ -100,26 +100,18 @@ void main() async {
   ''';
   final largeJsonData = jsonDecode(largeJsonString);
 
-  print("Logging large JSON (no truncation yet)...");
   DynamicLogger.log(largeJsonData, tag: 'LargeJSON-Full');
 
   // --- Truncation Examples ---
-  print('\n--- Truncation Examples ---');
-  await Future.delayed(const Duration(milliseconds: 500));
 
-  print("Configuring default truncation (depth 3, 5 entries)...");
   DynamicLogger.configure(
     truncate: true,
     maxDepth: 3,
     maxCollectionEntries: 5,
   );
 
-  await Future.delayed(const Duration(milliseconds: 500));
-  print("Logging large JSON (with default truncation)...");
   DynamicLogger.log(largeJsonData, tag: 'LargeJSON-DefaultTrunc');
 
-  await Future.delayed(const Duration(milliseconds: 500));
-  print("Logging large JSON (overriding truncation: depth 2, 3 entries)...");
   DynamicLogger.log(
     largeJsonData,
     tag: 'LargeJSON-OverrideTrunc',
@@ -129,8 +121,6 @@ void main() async {
     maxCollectionEntries: 100,
   );
 
-  await Future.delayed(const Duration(milliseconds: 500));
-  print("Logging large JSON (disabling truncation for this call)...");
   DynamicLogger.log(
     largeJsonData,
     tag: 'LargeJSON-NoTruncCall',
@@ -141,8 +131,8 @@ void main() async {
   // DynamicLogger.configure(truncate: false, maxDepth: 10, maxCollectionEntries: 100);
 
   // --- Dio RequestOptions Example (Uncomment to use) ---
-  // print('\n--- Dio RequestOptions Example ---');
-  // await Future.delayed(const Duration(milliseconds: 500));
+  //
+  //
   // final requestOptions = RequestOptions(
   //   path: 'https://example.com/users',
   //   method: 'POST',
@@ -150,7 +140,8 @@ void main() async {
   //   queryParameters: {'page': 1, 'limit': 10},
   //   data: {'name': 'New User', 'role': 'editor'},
   // );
-  // DynamicLogger.log(requestOptions, tag: 'DioRequest');
+  //  DynamicLogger.log(requestOptions, tag: 'DioRequest');
 
-  print('\n--- Examples Complete ---');
+  // Ensure all log has been recorded
+  await Future.delayed(Duration(microseconds: 1000));
 }
