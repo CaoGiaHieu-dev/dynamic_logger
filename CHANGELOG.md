@@ -1,3 +1,8 @@
+## 0.4.0
+
+- **Perf:** Integrated Dart Isolates to handle log message formatting in the background. This prevents UI jank and improves application performance when logging large or complex data structures.
+- **Docs:** Updated README with the latest version and clarified performance benefits.
+
 ## 0.3.0
 
 - **Chore:** Updated example file to include custom log handler configuration for better console output visibility.

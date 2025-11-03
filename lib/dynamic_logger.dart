@@ -3,7 +3,6 @@ library;
 import 'dart:async';
 import 'dart:convert'; // Used for JsonEncoder, primarily in _formatValue
 import 'dart:developer' as developer; // Default log handler
-import 'dart:isolate';
 
 /// Enum representing the different severity levels for log messages.
 enum LogLevel { INFO, WARNING, ERROR }
@@ -82,8 +81,8 @@ String _formatInIsolate(_LogPayload payload) {
         payload.msg is String ||
         payload.msg is num ||
         payload.msg is bool) {
-      contentBuffer
-          .writeln('$colorCode${DynamicLogger._formatValue(payload.msg)}${DynamicLogger._colorReset}');
+      contentBuffer.writeln(
+          '$colorCode${DynamicLogger._formatValue(payload.msg)}${DynamicLogger._colorReset}');
     } else {
       DynamicLogger._formatLogMessage(
         contentBuffer,
@@ -94,8 +93,9 @@ String _formatInIsolate(_LogPayload payload) {
         maxCollectionEntries: effectiveMaxEntries,
       );
     }
-      } catch (e) {
-        contentBuffer.clear();    final errorIndent = DynamicLogger._indentSpace * 1;
+  } catch (e) {
+    contentBuffer.clear();
+    final errorIndent = DynamicLogger._indentSpace * 1;
     contentBuffer.writeln(
         '$colorCode$errorIndent Error formatting log message: $e${DynamicLogger._colorReset}');
     contentBuffer.writeln(
@@ -117,7 +117,6 @@ String _formatInIsolate(_LogPayload payload) {
 
   return buffer.toString().trimRight();
 }
-
 
 /// {@template dynamic_logger}
 /// A flexible and memory-efficient logger for Dart/Flutter applications.
@@ -243,25 +242,14 @@ class DynamicLogger {
       colorCode: _instance._getColorCode(level),
     );
 
-    // Fire-and-forget the isolate
-    Isolate.run(() => _formatInIsolate(payload)).then((formattedMessage) {
-      final handler = logHandlerOverride ?? _instance.logHandler;
-      handler(
-        formattedMessage,
-        name: 'LOGGER',
-        stackTrace: stackTrace,
-        level: _mapLogLevel(level),
-      );
-    }).catchError((e, s) {
-      // Handle errors from the isolate itself (e.g., if it fails to spawn)
-      developer.log(
-        'Error spawning DynamicLogger isolate',
-        error: e,
-        stackTrace: s,
-        level: 1000,
-        name: 'DynamicLoggerInternal',
-      );
-    });
+    final formattedMessage = _formatInIsolate(payload);
+    final handler = logHandlerOverride ?? _instance.logHandler;
+    handler(
+      formattedMessage,
+      name: 'LOGGER',
+      stackTrace: stackTrace,
+      level: _mapLogLevel(level),
+    );
   }
 
   // --- Header/Footer ---
@@ -392,7 +380,8 @@ class DynamicLogger {
       final itemLines = itemBuffer.toString().trimRight().split('\n');
       for (int j = 0; j < itemLines.length; j++) {
         final line = itemLines[j];
-        if (j == itemLines.length - 1) { // Is this the last line of the formatted item?
+        if (j == itemLines.length - 1) {
+          // Is this the last line of the formatted item?
           buffer.writeln(
               '$line$colorCode$comma$_colorReset'); // Add comma and reset color
         } else {
@@ -681,7 +670,8 @@ class DynamicLogger {
         final valueLines = valueBuffer.toString().trimRight().split('\n');
         for (int j = 0; j < valueLines.length; j++) {
           final line = valueLines[j];
-          if (j == valueLines.length - 1) { // Last line of value
+          if (j == valueLines.length - 1) {
+            // Last line of value
             buffer.writeln('$line$comma');
           } else {
             buffer.writeln(line);
@@ -734,7 +724,8 @@ class DynamicLogger {
       final itemLines = itemBuffer.toString().trimRight().split('\n');
       for (int j = 0; j < itemLines.length; j++) {
         final line = itemLines[j];
-        if (j == itemLines.length - 1) { // Last line of item
+        if (j == itemLines.length - 1) {
+          // Last line of item
           buffer.writeln('$line$comma');
         } else {
           buffer.writeln(line);

@@ -24,7 +24,7 @@ Add `dynamic_logger` as a dependency in your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  dynamic_logger: ^0.2.2
+  dynamic_logger: ^0.4.0
 ```
 Then run `dart pub get` or `flutter pub get`.
 
