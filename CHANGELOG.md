@@ -1,7 +1,28 @@
+## 0.5.0
+
+- **Fix:** Log formatting now runs synchronously on the calling thread. The isolate-based
+  implementation was removed in 0.4.0 but the documentation still claimed otherwise —
+  this release corrects all misleading references.
+- **Feature:** Added `minLevel` to `configure()`. Messages below the configured minimum
+  severity are silently dropped without any formatting work.
+- **Feature:** Added `maxStringLength` to `configure()` and `log()`. When truncation is
+  active, strings exceeding this length are clipped with a remaining character count
+  (e.g. `"ABC"... (47 more chars)`).
+- **Feature:** Added `colorEnabled` to `configure()`. Set to `false` to emit plain text
+  without ANSI escape codes — useful for file sinks or environments without ANSI support.
+- **Feature:** Added `DynamicLogger.reset()`. Restores all configuration to factory
+  defaults. Intended for use in tests to prevent state leaking between test cases.
+- **Fix:** Removed spurious leading space in List opening bracket (was ` [`, now `[`).
+- **Refactor:** Removed unused `_LogPayload` data class and `_formatInIsolate` function.
+  Formatting is now inlined directly in `log()` with cleaner parameter names.
+- **Tests:** Expanded test suite with coverage for all log levels, header/footer
+  structure, `minLevel`, `colorEnabled`, `maxStringLength`, `formatData`,
+  `logHandlerOverride`, enable/disable, `reset()`, and truncation edge cases.
+
 ## 0.4.0
 
-- **Perf:** Integrated Dart Isolates to handle log message formatting in the background. This prevents UI jank and improves application performance when logging large or complex data structures.
-- **Docs:** Updated README with the latest version and clarified performance benefits.
+- **Docs:** Updated README with the latest version.
+- **Refactor:** Removed `dart:isolate` dependency.
 
 ## 0.3.0
 

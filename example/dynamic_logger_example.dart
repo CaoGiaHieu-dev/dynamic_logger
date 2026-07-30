@@ -1,8 +1,10 @@
-import 'dart:convert'; // Required for jsonDecode
+import 'dart:convert';
 import 'package:dynamic_logger/dynamic_logger.dart';
 
-Future<void> main() async {
-  // Configure logger to print to console for visibility
+void main() {
+  // Configure logger to print to console for visibility.
+  // By default, DynamicLogger uses dart:developer.log which may not appear
+  // in terminal output.
   DynamicLogger.configure(
     logHandler: (message,
         {error, level = 0, name = '', stackTrace, time, zone, sequenceNumber}) {
@@ -32,7 +34,7 @@ Future<void> main() async {
       987,
       false,
       null,
-      [], // Empty list
+      [],
       {
         'mapInListKey': 'Value inside map in list',
         'anotherMapInListKey': 100,
@@ -51,18 +53,14 @@ Future<void> main() async {
         'finalKey': 'Reached the end!',
         'anotherBool': false,
       },
-      'emptyMapValue': {}, // Empty map
-      'emptyListValue': [], // Empty list
+      'emptyMapValue': {},
+      'emptyListValue': [],
     },
-    'longStringKey':
-        'This is a relatively long string designed to test how the logger handles wrapping or displaying longer text values within the structure.',
   };
   DynamicLogger.log(complexData, tag: 'ComplexData');
 
   // --- Large JSON Example ---
 
-  // Simulate a large JSON structure (e.g., from an API response)
-  // In a real app, you might get this from an HTTP response or file.
   final largeJsonString = '''
   {
     "metadata": {
@@ -75,26 +73,15 @@ Future<void> main() async {
       {"id": 2, "name": "Bob", "email": "bob@example.com", "isActive": false, "tags": ["user"], "profile": {"age": 25, "city": "Los Angeles"}},
       {"id": 3, "name": "Charlie", "email": "charlie@example.com", "isActive": true, "tags": ["user", "tester"], "profile": {"age": 35, "city": "Chicago"}},
       {"id": 4, "name": "David", "email": "david@example.com", "isActive": true, "tags": ["dev"], "profile": {"age": 28, "city": "Houston"}},
-      {"id": 5, "name": "Eve", "email": "eve@example.com", "isActive": false, "tags": ["guest"], "profile": {"age": 22, "city": "Phoenix"}},
-      {"id": 6, "name": "Frank", "email": "frank@example.com", "isActive": true, "tags": ["admin", "dev", "lead"], "profile": {"age": 40, "city": "Philadelphia"}},
-      {"id": 7, "name": "Grace", "email": "grace@example.com", "isActive": true, "tags": ["user"], "profile": {"age": 31, "city": "San Antonio"}},
-      {"id": 8, "name": "Heidi", "email": "heidi@example.com", "isActive": false, "tags": [], "profile": {"age": 29, "city": "San Diego"}},
-      {"id": 9, "name": "Ivan", "email": "ivan@example.com", "isActive": true, "tags": ["dev", "tester"], "profile": {"age": 33, "city": "Dallas"}},
-      {"id": 10, "name": "Judy", "email": "judy@example.com", "isActive": true, "tags": ["user"], "profile": {"age": 27, "city": "San Jose"}}
+      {"id": 5, "name": "Eve", "email": "eve@example.com", "isActive": false, "tags": ["guest"], "profile": {"age": 22, "city": "Phoenix"}}
     ],
     "settings": {
       "theme": "dark",
       "notifications": {"email": true, "sms": false, "push": true},
       "featureFlags": {
         "newDashboard": true,
-        "betaFeatureX": false,
-        "analyticsV2": true
-      },
-      "preferences": [
-        {"key": "lang", "value": "en-US"},
-        {"key": "timezone", "value": "America/New_York"},
-        {"key": "itemsPerPage", "value": 50}
-      ]
+        "betaFeatureX": false
+      }
     }
   }
   ''';
@@ -115,7 +102,6 @@ Future<void> main() async {
   DynamicLogger.log(
     largeJsonData,
     tag: 'LargeJSON-OverrideTrunc',
-    // No need to set truncate: true if default is true, but explicit here
     truncate: true,
     maxDepth: 100,
     maxCollectionEntries: 100,
@@ -124,24 +110,34 @@ Future<void> main() async {
   DynamicLogger.log(
     largeJsonData,
     tag: 'LargeJSON-NoTruncCall',
-    truncate: false, // Override default and disable truncation
+    truncate: false,
   );
 
-  // --- Reset Configuration (Optional) ---
-  // DynamicLogger.configure(truncate: false, maxDepth: 10, maxCollectionEntries: 100);
+  // --- minLevel Example ---
 
-  // --- Dio RequestOptions Example (Uncomment to use) ---
-  //
-  //
-  // final requestOptions = RequestOptions(
-  //   path: 'https://example.com/users',
-  //   method: 'POST',
-  //   headers: {'Authorization': 'Bearer xyz', 'X-API-Key': '12345'},
-  //   queryParameters: {'page': 1, 'limit': 10},
-  //   data: {'name': 'New User', 'role': 'editor'},
-  // );
-  //  DynamicLogger.log(requestOptions, tag: 'DioRequest');
+  // Only WARNING and ERROR will be emitted; INFO is silently dropped.
+  DynamicLogger.configure(minLevel: LogLevel.WARNING);
+  DynamicLogger.log('This INFO is dropped');
+  DynamicLogger.log('This WARNING appears', level: LogLevel.WARNING);
 
-  // Ensure all log has been recorded
-  await Future.delayed(Duration(microseconds: 1000));
+  // --- maxStringLength Example ---
+
+  DynamicLogger.configure(
+    minLevel: LogLevel.INFO,
+    truncate: true,
+    maxStringLength: 30,
+  );
+  DynamicLogger.log(
+    'This is a very long string that will be truncated by the logger.',
+    tag: 'StringTrunc',
+  );
+
+  // --- Disable colors (useful for plain-file output) ---
+
+  DynamicLogger.configure(colorEnabled: false);
+  DynamicLogger.log('No ANSI color codes here', tag: 'PlainText');
+
+  // --- Reset to defaults ---
+
+  DynamicLogger.reset();
 }

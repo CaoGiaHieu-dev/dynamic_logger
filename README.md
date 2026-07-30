@@ -7,16 +7,16 @@ A flexible and memory-efficient logger for Dart/Flutter applications, providing 
 ## Features
 
 -   **Structured Output:** Pretty-prints Maps and Lists in a JSON-like format for easy readability.
--   **Color-Coded Levels:** Differentiates between INFO, WARNING, and ERROR logs using distinct colors (in terminals supporting ANSI codes).
--   **Handles Complex Data:** Logs primitives (String, num, bool, null), Maps, Lists, and any object with proper `toString()` or `toJson()` methods.
--   **Memory Efficient & Non-Blocking:** Designed to reduce intermediate string creation and now uses [Dart Isolates](https://dart.dev/language/concurrency) to perform heavy formatting work in the background, preventing UI jank when logging large data structures.
--   **Truncation:** Automatically truncates deep or large collections (Maps/Lists) to prevent excessive memory usage and overly long logs.
-    -   Configurable maximum depth and maximum collection entries.
-    -   Can be enabled/disabled globally or per log call.
--   **Configuration:** Set global defaults for truncation behavior, depth/entry limits, and the underlying log handler (`dart:developer` by default).
--   **Clean Formatting:** Uses clear single-line headers/footers to delineate log blocks.
--   **Static Utility:** Includes `DynamicLogger.formatData` to format data structures into strings without logging.
--   **Easy Access:** Simple static methods (`DynamicLogger.log`, `DynamicLogger.configure`) for convenient use.
+-   **Color-Coded Levels:** Differentiates between INFO, WARNING, and ERROR logs using distinct colors (in terminals supporting ANSI codes). Colors can be disabled globally.
+-   **Handles Complex Data:** Logs primitives (String, num, bool, null), Maps, Lists, and any object with a `toString()` or `toJson()` method.
+-   **Truncation:** Limits output size for large or deeply nested data structures.
+    -   Configurable `maxDepth`, `maxCollectionEntries`, and `maxStringLength`.
+    -   Can be enabled/disabled globally via `configure()` or per call via `log()`.
+-   **Level Filtering:** Set a `minLevel` to silently drop messages below a severity threshold (e.g. suppress INFO in production).
+-   **Configuration:** Global defaults via `DynamicLogger.configure()`; per-call overrides via `DynamicLogger.log()` parameters.
+-   **Test-Friendly:** `DynamicLogger.reset()` restores all defaults — no state leaks between test cases.
+-   **Static Utility:** `DynamicLogger.formatData` formats data into a plain-text string without logging.
+-   **Clean Formatting:** Single-line box-drawing headers/footers delimit each log block.
 
 ## Installation
 
@@ -24,7 +24,7 @@ Add `dynamic_logger` as a dependency in your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  dynamic_logger: ^0.4.0
+  dynamic_logger: ^0.5.0
 ```
 Then run `dart pub get` or `flutter pub get`.
 
@@ -32,7 +32,7 @@ Then run `dart pub get` or `flutter pub get`.
 
 ## Basic Usage
 
-Import the package and use the static log method. `DynamicLogger.log` is a **fire-and-forget** method, meaning it returns immediately and performs formatting in a background isolate. **No `await` is needed.**
+Import the package and use the static log method. Formatting runs synchronously, so output appears immediately. For large data structures, enable truncation to limit execution time.
 
 ```dart
 import 'package:dynamic_logger/dynamic_logger.dart';
@@ -87,24 +87,25 @@ void main() {
 
 ### Configuration
 
-You can set global defaults for the logger's behavior. This is useful for setting up truncation project-wide.
+Set global defaults once (e.g. in `main()`) for the entire application.
 
 ```dart
 import 'package:dynamic_logger/dynamic_logger.dart';
 
 void setupLogger({bool isProduction = false}) {
   DynamicLogger.configure(
-    // Enable truncation by default for all logs
+    // Only emit WARNING and ERROR in production
+    minLevel: isProduction ? LogLevel.WARNING : LogLevel.INFO,
+    // Enable truncation to keep logs readable
     truncate: true,
-    // Set default max depth for nested structures
     maxDepth: 5,
-    // Set default max entries shown for Maps/Lists
     maxCollectionEntries: 20,
-    // Globally enable or disable logging (defaults to true)
-    enable: !isProduction, // Disable logs in production builds
-    // Optionally override the default log handler (e.g., for custom output)
+    maxStringLength: 200,
+    // Disable ANSI colors when writing to a file sink
+    colorEnabled: true,
+    // Print to console instead of dart:developer
     logHandler: (message, {error, level = 0, name = '', stackTrace, time, zone, sequenceNumber}) {
-      print(message); // Print to console instead of dart:developer
+      print(message);
     },
   );
 }
@@ -113,7 +114,6 @@ void main() {
   const bool kReleaseMode = bool.fromEnvironment('dart.vm.product');
   setupLogger(isProduction: kReleaseMode);
 
-  // Subsequent logs will use the configured defaults unless overridden
   DynamicLogger.log({'large': 'data', 'will': 'be', 'truncated': true});
 }
 ```
@@ -192,18 +192,9 @@ Truncated Formatted Data:
 
 ## Performance Considerations
 
-- **Isolates:** Formatting runs in a background isolate, preventing UI blocking
-- **Fire-and-forget:** Logs are non-blocking; the method returns immediately
-- **Memory efficient:** Truncation prevents excessive memory usage with large data
-- **Async timing:** Since formatting happens asynchronously, logs may appear out of order if called in rapid succession
-
-If you need to ensure logs complete before program exit, add a small delay:
-```dart
-void main() async {
-  DynamicLogger.log('Important message');
-  await Future.delayed(Duration(milliseconds: 100)); // Wait for isolate
-}
-```
+- **Synchronous formatting:** `DynamicLogger.log` formats and emits output on the calling thread. For typical API responses and app state, this is imperceptible.
+- **Truncation:** Use `truncate: true` with `maxDepth`, `maxCollectionEntries`, and `maxStringLength` to bound both execution time and output size for large data structures.
+- **Level filtering:** Set `minLevel` to drop unwanted messages before any formatting work occurs.
 
 ## Example Output
 
@@ -216,7 +207,7 @@ The logger produces beautifully formatted, color-coded output:
   "age": 30,
   "isActive": true,
   "tags":
-   [
+  [
     "admin",
     "dev"
   ]
@@ -249,26 +240,34 @@ Logs a message or data structure with formatting.
 
 ### `DynamicLogger.configure()`
 
-Sets global defaults for the logger.
+Sets global defaults for the logger. All parameters are optional.
 
 **Parameters:**
-- `logHandler` (LogHandler?): Custom log handler function
-- `maxDepth` (int?): Default maximum nesting depth (default: 10)
-- `maxCollectionEntries` (int?): Default maximum entries (default: 100)
-- `truncate` (bool?): Enable truncation by default (default: false)
+- `logHandler` (LogHandler?): Custom log output function
+- `maxDepth` (int?): Default maximum nesting depth when truncation is active (default: 10)
+- `maxCollectionEntries` (int?): Default maximum Map/List entries when truncation is active (default: 100)
+- `maxStringLength` (int?): Default maximum string length when truncation is active. -1 = no limit (default: -1)
+- `truncate` (bool?): Enable truncation globally (default: false)
 - `enable` (bool?): Enable/disable logging globally (default: true)
+- `minLevel` (LogLevel?): Minimum severity to emit. Messages below this are silently dropped (default: LogLevel.INFO)
+- `colorEnabled` (bool?): Emit ANSI color codes. Set to false for plain-text sinks (default: true)
+
+### `DynamicLogger.reset()`
+
+Restores all configuration to factory defaults. Use in test `tearDown` to prevent state leaking between test cases.
 
 ### `DynamicLogger.formatData()`
 
-Formats data into a string without logging.
+Formats data into a plain-text string without logging.
 
 **Parameters:**
 - `data` (dynamic): The data to format
 - `truncate` (bool?): Enable/disable truncation
 - `maxDepth` (int?): Maximum nesting depth
 - `maxCollectionEntries` (int?): Maximum entries to show
+- `maxStringLength` (int?): Maximum string length
 
-**Returns:** `String` - The formatted data
+**Returns:** `String` — The formatted data (no ANSI color codes)
 
 ## Contributing
 
