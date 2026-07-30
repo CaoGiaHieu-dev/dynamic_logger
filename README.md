@@ -220,7 +220,7 @@ The logger produces beautifully formatted, color-coded output:
 - **WARNING:** Yellow
 - **ERROR:** Red
 
-For a visual example, see [output.png](output.png) in the repository.
+For a visual example, see ![output.png](output.png) in the repository.
 
 ## API Reference
 
